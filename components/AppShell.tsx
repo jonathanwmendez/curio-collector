@@ -19,6 +19,18 @@ export async function processInbox(userId: string) {
   for (const r of rows || []) {
     try {
       const p = r.payload || {};
+      if (p.kind === 'wish') {
+        const photo = r.photo_front ? await uploadPhoto(userId, await dataUrlToBlob(r.photo_front)) : null;
+        const w: any = { user_id: userId, name: String(p.name || 'Untitled').slice(0, 200), photo };
+        ['category', 'year', 'set_name', 'number', 'subject', 'condition', 'notes'].forEach(k => { if (typeof p[k] === 'string') w[k] = p[k]; });
+        ['target_price', 'value'].forEach(k => { if (typeof p[k] === 'number') w[k] = p[k]; });
+        if (typeof p.value === 'number') w.value_updated_at = new Date().toISOString();
+        const { error } = await sb.from('wishes').insert(w);
+        if (error) throw error;
+        await sb.from('scan_inbox').update({ processed_at: new Date().toISOString(), photo_front: null, photo_back: null }).eq('id', r.id);
+        added++;
+        continue;
+      }
       const item: any = { user_id: userId };
       ITEM_FIELDS.forEach(k => { if (p[k] !== undefined && p[k] !== null) item[k] = p[k]; });
       item.name = String(item.name || 'Untitled item').slice(0, 200);
